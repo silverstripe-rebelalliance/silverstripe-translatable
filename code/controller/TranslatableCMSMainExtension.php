@@ -4,7 +4,7 @@
  */
 class TranslatableCMSMainExtension extends Extension {
 
-	static $allowed_actions = array(
+	static $collection_actions = array(
 		'createtranslation',
 	);
 
@@ -14,12 +14,13 @@ class TranslatableCMSMainExtension extends Extension {
 		// as an intermediary rather than the endpoint controller
 		if(!$this->owner->stat('tree_class')) return;
 
-		// Locale" attribute is either explicitly added by LeftAndMain Javascript logic,
-		// or implied on a translated record (see {@link Translatable->updateCMSFields()}).
-		// $Lang serves as a "context" which can be inspected by Translatable - hence it
-		// has the same name as the database property on Translatable.
-		$req = $this->owner->getRequest();
-		$id = $req->param('ID');
+		Requirements::javascript('translatable/javascript/CMSMain.Translatable.js');
+		Requirements::css('translatable/css/CMSMain.Translatable.css');
+	}
+
+	function beforeCallActionHandler($req, $action) {
+		$id = $req->param('ItemID');
+
 		if($req->requestVar("Locale")) {
 			$this->owner->Locale = $req->requestVar("Locale");
 		} elseif($req->requestVar("locale")) {
@@ -29,8 +30,10 @@ class TranslatableCMSMainExtension extends Extension {
 			if($record && $record->Locale) $this->owner->Locale = $record->Locale;
 		} else {
 			$this->owner->Locale = Translatable::default_locale();
+
+			/* TODO: I don't think this is needed, but I don't really understand it's purpose
 			if ($this->owner->class == 'CMSPagesController') {
-				// the CMSPagesController always needs to have the locale set, 
+				// the CMSPagesController always needs to have the locale set,
 				// otherwise page editing will cause an extra
 				// ajax request which looks weird due to multiple "loading"-flashes
 				$getVars = $req->getVars();
@@ -43,6 +46,7 @@ class TranslatableCMSMainExtension extends Extension {
 					'?' . http_build_query($getVars)
 				));
 			}
+			*/
 		}
 		Translatable::set_current_locale($this->owner->Locale);
 
@@ -62,30 +66,26 @@ class TranslatableCMSMainExtension extends Extension {
 			$transPage = $page->getTranslation($requestLocale);
 			if($transPage) {
 				Translatable::set_current_locale($transPage->Locale);
-				return $this->owner->redirect(Controller::join_links(
-					$this->owner->Link('show'),
-					$transPage->ID
-					// ?locale will automatically be added
-				));
+				// ?locale will automatically be added
+				$this->owner->redirect($this->owner->Link('show', $transPage->ID));
+				return false;
 			} else if ($this->owner->class != 'CMSPagesController') {
 				// If the record is not translated, redirect to pages overview
-				return $this->owner->redirect(Controller::join_links(
+				$this->owner->redirect(Controller::join_links(
 					singleton('CMSPagesController')->Link(),
 					'?locale=' . $requestLocale
 				));
+				return false;
 			}
 		}
-		
+
 		// collect languages for TinyMCE spellchecker plugin.
 		// see http://wiki.moxiecode.com/index.php/TinyMCE:Plugins/spellchecker
 		$langName = i18n::get_locale_name($this->owner->Locale);
 		HtmlEditorConfig::get('cms')->setOption(
-			'spellchecker_languages', 
+			'spellchecker_languages',
 			"+{$langName}={$this->owner->Locale}"
 		);
-
-		Requirements::javascript('translatable/javascript/CMSMain.Translatable.js');
-		Requirements::css('translatable/css/CMSMain.Translatable.css');
 	}
 	
 	function updateEditForm(&$form) {
@@ -123,10 +123,7 @@ class TranslatableCMSMainExtension extends Extension {
 		// persist in the database before the user requests it
 		$translatedRecord = $record->createTranslation($langCode);
 
-		$url = Controller::join_links(
-			$this->owner->Link('show'),
-			$translatedRecord->ID
-		);
+		$url = $this->owner->Link('show', $translatedRecord->ID);
 
 		// set the X-Pjax header to Content, so that the whole admin panel will be refreshed
 		$this->owner->getResponse()->addHeader('X-Pjax', 'Content');
