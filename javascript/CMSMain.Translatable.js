@@ -71,6 +71,7 @@
 			onclick: function(e) {
 				this.parents('form').trigger('submit', [this]);
 				e.preventDefault();
+				$('.cms-container').loadPanel(url);
 				return false;
 			}
 		});
